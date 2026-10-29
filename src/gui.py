@@ -2,6 +2,7 @@ import json
 import subprocess
 import threading
 import tkinter as tk
+from tkinterdnd2 import DND_FILES, TkinterDnD
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -26,7 +27,7 @@ def guardar_config(datos):
         pass
 
 
-class App(tk.Tk):
+class App(TkinterDnD.Tk):
     def __init__(self):
         super().__init__()
         self.title("MarkItDown Visual")
@@ -76,6 +77,10 @@ class App(tk.Tk):
         barra.grid(row=0, column=1, sticky="ns")
         self.lista.config(yscrollcommand=barra.set)
 
+        for zona in (self.lista, self):
+            zona.drop_target_register(DND_FILES)
+            zona.dnd_bind("<<Drop>>", self._al_soltar)
+
         # Carpeta de salida
         fila_salida = ttk.Frame(marco)
         fila_salida.grid(row=2, column=0, sticky="ew", pady=4)
@@ -116,14 +121,28 @@ class App(tk.Tk):
                 ("Todos los archivos", "*.*"),
             ],
         )
-        if not rutas:
-            return
-        self.datos["carpeta_entrada"] = str(Path(rutas[0]).parent)
+        if rutas:
+            self.datos["carpeta_entrada"] = str(Path(rutas[0]).parent)
+            self._agregar_rutas(rutas)
+
+    def _al_soltar(self, evento):
+        # splitlist maneja correctamente los nombres con espacios
+        self._agregar_rutas(self.tk.splitlist(evento.data))
+        return evento.action
+
+    def _agregar_rutas(self, rutas):
+        ignorados = 0
         for ruta in rutas:
+            if not Path(ruta).is_file():
+                ignorados += 1
+                continue
             if ruta not in self.archivos:
                 self.archivos.append(ruta)
                 self.lista.insert("end", Path(ruta).name)
-        self.estado.set(f"{len(self.archivos)} archivo(s) listo(s) para convertir.")
+        mensaje = f"{len(self.archivos)} archivo(s) listo(s) para convertir."
+        if ignorados:
+            mensaje += f" Se ignoraron {ignorados} elemento(s) que no son archivos."
+        self.estado.set(mensaje)
 
     def limpiar(self):
         self.archivos.clear()
